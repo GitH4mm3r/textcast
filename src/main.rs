@@ -70,8 +70,6 @@ fn setup(
         ..default()
     });
 
-    // Spawn a ray caster at the center with the rays travelling right
-    commands.spawn(RayCaster::new(Vec3::ZERO, Vec3::new(1.0,0.0,1.0)));
     // ...spawn colliders and other things
     let myscene = asset_server.load("A.gltf#Scene0");
     println!("{:?}",myscene);
