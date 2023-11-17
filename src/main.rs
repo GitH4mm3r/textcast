@@ -1,11 +1,10 @@
-//! Loads and renders a glTF file as a scene.
+mod camera;
 
-use bevy_xpbd_3d::prelude::*;
+
+use camera::*; 
 use bevy::{
-    pbr::{CascadeShadowConfigBuilder, DirectionalLightShadowMap},
     prelude::*,
-};
-use bevy::{
+    window::PrimaryWindow,
     pbr::{MaterialPipeline, MaterialPipelineKey},
     reflect::TypePath,
     render::{
@@ -17,20 +16,19 @@ use bevy::{
     },
 };
 use bevy_rapier3d::prelude::*;
-use bevy::window::PrimaryWindow;
 use std::f32::consts::*;
 
 fn main() {
     App::new()
-        .insert_resource(DirectionalLightShadowMap { size: 4096 })
         .add_plugins((
             DefaultPlugins,
             MaterialPlugin::<LineMaterial>::default(),
             RapierPhysicsPlugin::<NoUserData>::default(),
             RapierDebugRenderPlugin::default(),
+            CameraPlugin,
         ))
-        .add_systems(Startup, setup)
-        .add_systems(Update, (animate_light_direction,rotate,cast_ray,move_scene_entities))
+        .add_systems(Startup, (setup,add_colliders))
+        .add_systems(Update, (animate_light_direction,rotate,cast_ray,move_scene_entities,add_colliders))
         .run();
 }
 
@@ -40,37 +38,8 @@ fn setup(
     mut materials: ResMut<Assets<LineMaterial>>, 
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
-    commands.spawn((
-        Camera3dBundle {
-            transform: Transform::from_xyz(1.0, 0.7, 1.0)
-                .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
-            ..default()
-        },
-        EnvironmentMapLight {
-            diffuse_map: asset_server.load("environment_maps/pisa_diffuse_rgb9e5_zstd.ktx2"),
-            specular_map: asset_server.load("environment_maps/pisa_specular_rgb9e5_zstd.ktx2"),
-        },
-    ));
 
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
-            shadows_enabled: true,
-            ..default()
-        },
-        // This is a relatively small scene, so use tighter shadow
-        // cascade bounds than the default for better quality.
-        // We also adjusted the shadow map to be larger since we're
-        // only using a single cascade.
-        cascade_shadow_config: CascadeShadowConfigBuilder {
-            num_cascades: 1,
-            maximum_distance: 1.6,
-            ..default()
-        }
-        .into(),
-        ..default()
-    });
-
-    // ...spawn colliders and other things
+    // ...spawn colliders and other things 
     let myscene = asset_server.load("A.gltf#Scene0");
     println!("{:?}",myscene);
     commands.spawn((SceneBundle {
@@ -79,13 +48,12 @@ fn setup(
         ..default()
         }, MyScene,)
     );
-
+   
     // Spawn a list of lines with start and end points for each lines
     commands.spawn(MaterialMeshBundle {
         mesh: meshes.add(Mesh::from(LineList {
             lines: vec![
-                (Vec3::ZERO, Vec3::new(1.0, 0.0, 1.0)),
-                (Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0)),
+                (Vec3::ZERO, Vec3::new(1.0, 0.0, 0.0)),
             ],
         })),
         transform: Transform::from_xyz(0.0, 0.0, 0.0),
@@ -107,20 +75,6 @@ fn animate_light_direction(
             time.elapsed_seconds() * PI / 5.0,
             -FRAC_PI_4,
         );
-    }
-}
-
-fn print_hits(query: Query<(&RayCaster, &RayHits)>) {
-    for (ray, hits) in &query {
-        // For the faster iterator that isn't sorted, use `.iter()`
-        for hit in hits.iter_sorted() {
-            println!(
-                "Hit entity {:?} at {} with normal {}",
-                hit.entity,
-                ray.origin + ray.direction * hit.time_of_impact,
-                hit.normal,
-            );
-        }
     }
 }
 
@@ -192,6 +146,26 @@ impl From<LineStrip> for Mesh {
     }
 }
 
+fn add_colliders(
+    mut commands: Commands,
+    scene_meshes: Query<(Entity, &Name, &Handle<Mesh>), Added<Name>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    // iterate over all meshes in the scene and match them by their name.
+    for (entity, name, mesh_handle) in scene_meshes.iter() {
+        // "LetterA" would be the name of the Letter object in Blender.
+        if name.to_string() == "Text" {
+            let mesh = meshes.get(mesh_handle).unwrap();
+            println!("added mesh");
+            // Create the collider from the mesh.
+            let collider = Collider::from_bevy_mesh(mesh, &ComputedColliderShape::TriMesh).unwrap();
+            // Attach collider to the entity of this same object.
+            commands
+                .entity(entity)
+                .insert(collider);
+        }
+    }
+}
 
 
 fn cast_ray(
@@ -215,11 +189,11 @@ fn cast_ray(
 
         // Then cast the ray.
         let hit = rapier_context.cast_ray(
-            ray.origin,
-            ray.direction,
+            Vec3::ZERO, 
+            Vec3::new(1.0, 0.0, 0.0),
             f32::MAX,
             true,
-            QueryFilter::only_dynamic(),
+            QueryFilter::new(),
         );
 
         if let Some((entity, _toi)) = hit {
@@ -227,6 +201,7 @@ fn cast_ray(
             // Because of the query filter, only colliders attached to a dynamic body
             // will get an event.
             let color = Color::BLUE;
+            println!("hit!");
             commands.entity(entity).insert(ColliderDebugColor(color));
         }
     }
