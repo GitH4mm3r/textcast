@@ -18,7 +18,7 @@ fn spawn_camera( mut commands: Commands,asset_server: Res<AssetServer>,) {
 
     commands.spawn((
         Camera3dBundle {
-            transform: Transform::from_xyz(1.0, 0.7, 1.0)
+            transform: Transform::from_xyz(0.0, 0.0, 3.0)
                 .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
             ..default()
         },
