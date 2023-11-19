@@ -18,8 +18,8 @@ fn spawn_camera( mut commands: Commands,asset_server: Res<AssetServer>,) {
 
     commands.spawn((
         Camera3dBundle {
-            transform: Transform::from_xyz(0.0, 0.0, 4.0)
-                .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::ZERO),
+            transform: Transform::from_xyz(0.0, 0.0, 3.0)
+                .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
             ..default()
         },
         EnvironmentMapLight {
