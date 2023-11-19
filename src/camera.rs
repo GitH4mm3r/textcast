@@ -2,8 +2,8 @@ use bevy::prelude::*;
 use bevy::pbr::{CascadeShadowConfigBuilder, DirectionalLightShadowMap};
 
 
-#[derive(Component,Debug)]
-pub struct MainCamera;
+// #[derive(Component,Debug)]
+// pub struct MainCamera;
 
 pub struct CameraPlugin;
 
