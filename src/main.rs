@@ -44,7 +44,7 @@ fn setup(
     println!("{:?}",myscene);
     commands.spawn((SceneBundle {
         scene: myscene,
-        transform: Transform::from_xyz(0.0, 0.0, 0.0),
+        transform: Transform::from_xyz(1.0, 0.0, 0.0),
         ..default()
         }, MyScene,)
     );
