@@ -47,7 +47,7 @@ fn setup(
     println!("{:?}",myscene);
     commands.spawn((SceneBundle {
         scene: myscene,
-        transform: Transform::from_xyz(-1.0, 0.0, 0.0),
+        transform: Transform::from_xyz(-1.0, 0.0, 0.1),
         ..default()
         }, MyScene,)
     );
@@ -56,7 +56,7 @@ fn setup(
     commands.spawn(MaterialMeshBundle {
         mesh: meshes.add(Mesh::from(LineList {
             lines: vec![
-                (Vec3::new(-0.65, 0.30, 2.0), Vec3::new(-0.65, 0.30, -2.50)),
+                (Vec3::new(-0.650, 0.25, 1.0), Vec3::new(-0.650, 0.250, -1.0)),
             ],
         })),
         transform: Transform::from_xyz(0.0, 0.0, 0.0),
@@ -85,6 +85,7 @@ fn rotate(mut query: Query<&mut Transform, With<MyScene>>, time: Res<Time>) {
     let rotation = time.delta_seconds() / 2.;
     for mut transform in &mut query {
         transform.rotate_local_x(time.delta_seconds() * PI / 4.0);
+        //transform.rotate_local_y(time.delta_seconds() * PI / 4.0);
         
         
     }
@@ -119,13 +120,19 @@ fn cast_ray(
     rapier_context: Res<RapierContext>,
 ) {
 
+        let ray_pos = Vec3::new(-0.650,0.25,1.0);
+        let ray_dir = Vec3::new(0.0, 0.0, -1.0);
+        let max_toi = f32::MAX;
+        let solid = true; 
+        let filter = QueryFilter::new();
+
         // Then cast the ray.
         let hit = rapier_context.cast_ray(
-            Vec3::new(-0.65, 0.30, 2.0), 
-            Vec3::new(-0.65, 0.30, -2.50),
-            f32::MAX,
+            ray_pos, 
+            ray_dir,
+            max_toi,
             true,
-            QueryFilter::new(),
+            filter,
         );
 
         if let Some((entity, _toi)) = hit {
@@ -136,6 +143,16 @@ fn cast_ray(
             println!("hit!");
             commands.entity(entity).insert(ColliderDebugColor(color));
         }
+
+        rapier_context.intersections_with_ray(
+            ray_pos, ray_dir, max_toi, solid, filter,
+            |entity, intersection| {
+                // Callback called on each collider hit by the ray.
+                let hit_point = intersection.point;
+                let hit_normal = intersection.normal;
+                println!("Entity {:?} hit at point {} with normal {}", entity, hit_point, hit_normal);
+                true // Return `false` instead if we want to stop searching for other hits.
+            });
     
 }
 
