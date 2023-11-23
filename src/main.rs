@@ -1,6 +1,9 @@
 mod camera;
+mod light_array;
+mod text_input;
 
-
+use light_array::*;
+use text_input::*;
 use camera::*; 
 use bevy::{
     prelude::*,
@@ -8,30 +11,46 @@ use bevy::{
     reflect::TypePath,
     pbr::{MaterialPipeline, MaterialPipelineKey},
     render::{
+        RenderPlugin,
         mesh::{MeshVertexBufferLayout, PrimitiveTopology},
+        settings::{WgpuSettings,Backends},
         render_resource::{
             AsBindGroup, PolygonMode, RenderPipelineDescriptor, ShaderRef,
             SpecializedMeshPipelineError,
         },
     },
 };
+use bevy::{input::keyboard::KeyboardInput, prelude::*};
+use bevy::text::TextAlignment::Center;
 use bevy_rapier3d::prelude::*;
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
+//use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use std::f32::consts::*;
 
 
 fn main() {
+
     App::new()
         .add_plugins((
-            DefaultPlugins,
+            DefaultPlugins.set(RenderPlugin {
+                render_creation: WgpuSettings {
+                    backends: Some(Backends::VULKAN),
+                    ..default()
+                }
+                .into(),
+            }),
             MaterialPlugin::<LineMaterial>::default(),
             RapierPhysicsPlugin::<NoUserData>::default(),
-            //RapierDebugRenderPlugin::default(),
+            LightArrayPlugin,
             CameraPlugin,
-            WorldInspectorPlugin::new(),
+            //WorldInspectorPlugin::new(),
+            TextinPlugin,
+            
         ))
+        .insert_resource(Msaa::Sample8)
+        .insert_resource(EnteredText{text:format!("")})
         .add_systems(Startup, (setup,add_colliders))
-        .add_systems(Update, (animate_light_direction,rotate,cast_ray,add_colliders))
+        .add_systems(Update, (/*animate_light_direction,*/shift_left,cast_ray,add_colliders,listen_received_character_events,listen_keyboard_input_events,display_et))
+        .add_event::<NewTextEntry>()
         .run();
 }
 
@@ -42,14 +61,60 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
 
-    // ...spawn colliders and other things 
-    let myscene = asset_server.load("A.gltf#Scene0");
+    // Text: this text displays 
+    commands.spawn((
+        TextBundle::from_section(
+            "",
+            TextStyle {
+                color:Color::WHITE,
+                font: asset_server.load("pop_warner.ttf"),
+                font_size: 36.0,
+                ..default()
+            },
+        )
+        .with_style(Style {
+            position_type: PositionType::Relative,
+            justify_self: JustifySelf::Center,
+            ..default()
+        }),MyText
+    ));
+
+    commands.spawn((
+        TextBundle::from_section(
+            "",
+            TextStyle {
+                color:Color::WHITE,
+                font: asset_server.load("pop_warner.ttf"),
+                font_size: 24.0,
+                ..default()
+            },
+        )
+        .with_style(Style {
+            position_type: PositionType::Relative,
+            justify_self: JustifySelf::Center,
+            top:Val::Px(40.0),
+            ..default()
+        }), DispText
+        ));
+
+
+    let myscene = asset_server.load("F.gltf#Scene0");
     println!("{:?}",myscene);
     commands.spawn((SceneBundle {
         scene: myscene,
-        transform: Transform::from_xyz(-1.0, 0.0, 0.1),
+        transform: Transform::from_xyz(3.0, 0.0, 0.1),
         ..default()
-        }, MyScene,)
+        }, ScrollingTextEnt,)
+    );
+
+    // Load Floor
+    let myscene = asset_server.load("Floor.gltf#Scene0");
+    println!("{:?}",myscene);
+    commands.spawn((SceneBundle {
+        scene: myscene,
+        transform: Transform::from_xyz(0.0, 0.0, 0.0),
+        ..default()
+        })
     );
    
     // Spawn a list of lines with start and end points for each lines
@@ -81,13 +146,14 @@ fn animate_light_direction(
     }
 }
 
-fn rotate(mut query: Query<&mut Transform, With<MyScene>>, time: Res<Time>) {
+fn shift_left(mut query: Query<&mut Transform, With<ScrollingTextEnt>>, time: Res<Time>, mut text: Query<&mut Text, With<MyText>>) {
     let rotation = time.delta_seconds() / 2.;
     for mut transform in &mut query {
-        transform.rotate_local_x(time.delta_seconds() * PI / 4.0);
-        //transform.rotate_local_y(time.delta_seconds() * PI / 4.0);
-        
-        
+        //transform.rotate_local_x(time.delta_seconds() * PI / 4.0);
+        transform.translation.x -= 0.4 * time.delta_seconds();
+        if transform.translation.x < -3.0 {
+            transform.translation.x = 3.0;
+        }
     }
 }
 
@@ -140,7 +206,6 @@ fn cast_ray(
             // Because of the query filter, only colliders attached to a dynamic body
             // will get an event.
             let color = Color::BLUE;
-            println!("hit!");
             commands.entity(entity).insert(ColliderDebugColor(color));
         }
 
@@ -156,10 +221,72 @@ fn cast_ray(
     
 }
 
+fn listen_received_character_events(
+    mut events2: EventReader<KeyboardInput>,
+    mut events: EventReader<ReceivedCharacter>,
+    mut edit_text: Query<&mut Text, With<MyText>>,
+) {
+    for event in events.read() {
+        for event2 in events2.read() {
+            match event2.key_code {
+                Some(KeyCode::Return) => continue,
+                _=> edit_text.single_mut().sections[0].value.push(event.char),
+            }
+        }
+    }
+}
 
+fn listen_keyboard_input_events(
+    mut events: EventReader<KeyboardInput>,
+    mut edit_text: Query<(Entity, &mut Text), With<MyText>>,
+    mut entered_text: ResMut<EnteredText>,
+    mut text_entry: EventWriter<NewTextEntry>,
+   
+) { 
+    for event in events.read() {
+        match event.key_code {
+            Some(KeyCode::Return) => {
+                let (ent,mut text) = edit_text.single_mut();
+                let text_string = &text.sections[0].value;
+                if text_string.len()>0 { 
+                    entered_text.text = text_string.clone();
+                    text_entry.send(NewTextEntry(entered_text.text.clone()));
+                }
+                text.sections[0].value = format!("");
+            }
+            Some(KeyCode::Back) => {
+                edit_text.single_mut().1.sections[0].value.pop();
+            }
+            _ => continue,
+        }
+    }
+}
+
+fn display_et (
+    mut disp_text: Query<(Entity, &mut Text), With<DispText>>,
+    mut entered_text: ResMut<EnteredText>
+){
+    let (ent,mut text) = disp_text.single_mut();
+    text.sections[0].value = entered_text.text.clone();
+}
+
+#[derive(Event)]
+struct NewTextEntry(String);
+
+
+#[derive(Resource)]
+struct EnteredText{
+    text:String,
+}
 
 #[derive(Component)]
-struct MyScene;
+struct DispText;
+
+#[derive(Component)]
+struct MyText;
+
+#[derive(Component)]
+struct ScrollingTextEnt;
 
 #[derive(Asset, TypePath, Default, AsBindGroup, Debug, Clone)]
 struct LineMaterial {
