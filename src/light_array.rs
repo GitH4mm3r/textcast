@@ -21,7 +21,7 @@ fn setup_lights(  mut commands: Commands,
         transform: Transform::from_xyz(0.0, 3.0, 10.0),
         point_light: PointLight {
             intensity: 20000.0, // lumens - roughly a 100W non-halogen incandescent bulb
-            color: Color::GREEN,
+            color: Color::RED,
             shadows_enabled: true,
             ..default()
         },
@@ -34,7 +34,7 @@ fn setup_lights(  mut commands: Commands,
                 ..default()
             })),
             material: materials.add(StandardMaterial {
-                base_color: Color::GREEN,
+                base_color: Color::RED,
                 emissive: Color::rgba_linear(0.0, 7.13, 0.0, 0.0),
                 ..default()
             }),
