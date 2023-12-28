@@ -23,7 +23,9 @@ use bevy::{
 use bevy::{input::keyboard::KeyboardInput, prelude::*};
 use bevy_rapier3d::prelude::*;
 //use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use std::f32::consts::*;
+
 
 
 fn main() {
@@ -44,9 +46,10 @@ fn main() {
             TextinPlugin,
             
         ))
+        .add_plugins(FrameTimeDiagnosticsPlugin::default())
         .insert_resource(Msaa::Sample8)
         .add_systems(Startup, (setup,add_colliders))
-        .add_systems(Update, (shift_left,cast_ray,add_colliders))
+        .add_systems(Update, (cast_ray,add_colliders))
         .add_event::<NewTextEntry>()
         .run();
 }
@@ -58,21 +61,12 @@ fn setup(
 ) {
 
 
-    // let myscene = asset_server.load("F.gltf#Scene0");
-    // println!("{:?}",myscene);
-    // commands.spawn((SceneBundle {
-    //     scene: myscene,
-    //     transform: Transform::from_xyz(3.0, 0.0, 0.1),
-    //     ..default()
-    //     }, ScrollingTextEnt,)
-    // );
-
     // Load Floor
     let myscene = asset_server.load("Floor.gltf#Scene0");
     println!("{:?}",myscene);
     commands.spawn((SceneBundle {
         scene: myscene,
-        transform: Transform::from_xyz(0.0, 0.0, 0.0),
+        transform: Transform::from_xyz(0.0, -4.0, 4.0),
         ..default()
         })
     );
@@ -90,17 +84,6 @@ fn animate_light_direction(
             time.elapsed_seconds() * PI / 5.0,
             -FRAC_PI_4,
         );
-    }
-}
-
-fn shift_left(mut query: Query<&mut Transform, With<ScrollingTextEnt>>, time: Res<Time>, mut text: Query<&mut Text, With<MyText>>) {
-    let rotation = time.delta_seconds() / 2.;
-    for mut transform in &mut query {
-        //transform.rotate_local_x(time.delta_seconds() * PI / 4.0);
-        transform.translation.x -= 0.4 * time.delta_seconds();
-        if transform.translation.x < -3.0 {
-            transform.translation.x = 3.0;
-        }
     }
 }
 
@@ -130,13 +113,20 @@ fn cast_ray(
     mut commands: Commands,
     windows: Query<&Window, With<PrimaryWindow>>,
     rapier_context: Res<RapierContext>,
+    mut hit_indices: ResMut<HitIndices>,
 ) {
 
-        let ray_pos = Vec3::new(-0.650,0.25,1.0);
-        let ray_dir = Vec3::new(0.0, 0.0, -1.0);
-        let max_toi = f32::MAX;
-        let solid = true; 
-        let filter = QueryFilter::new();
+    hit_indices.hits = Vec::new(); 
+    for x in 0..101 {
+        for y in 0..25 { 
+            let x_loc:f32 = -2.0 + (x as f32)*0.04;
+            let y_loc:f32 = 0.65 - (y as f32)*0.03;
+
+            let ray_pos = Vec3::new(x_loc,y_loc,-1.0);
+            let ray_dir = Vec3::new(0.0, 0.0, 1.0);
+            let max_toi = f32::MAX;
+            let solid = true; 
+            let filter = QueryFilter::new();
 
         // Then cast the ray.
         let hit = rapier_context.cast_ray(
@@ -151,11 +141,16 @@ fn cast_ray(
             ray_pos, ray_dir, max_toi, solid, filter,
             |entity, intersection| {
                 // Callback called on each collider hit by the ray.
+                hit_indices.hits.push((x,y));
                 let hit_point = intersection.point;
                 let hit_normal = intersection.normal;
-                println!("Entity {:?} hit at point {} with normal {}", entity, hit_point, hit_normal);
-                true // Return `false` instead if we want to stop searching for other hits.
+                //println!("Entity {:?} hit at point {} with normal {}", entity, hit_point, hit_normal);
+                false // Return `false` instead if we want to stop searching for other hits.
             });
+
+        }
+    }
+    
     
 }
 
@@ -175,6 +170,8 @@ struct MyText;
 
 #[derive(Component)]
 struct ScrollingTextEnt;
+
+
 
 
 
